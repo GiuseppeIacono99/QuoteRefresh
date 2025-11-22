@@ -1,6 +1,5 @@
 package com.pollingquote;
 
-
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -13,19 +12,18 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class BettingBot extends TelegramLongPollingBot {
-    
-    private final String botUsername = "NOME_DEL_TUO_BOT";
-    private final String botToken = "INSERISCI_IL_TUO_TOKEN_QUI";
-    private Long chatIdUtente = null;  // salva chi ha fatto /start
+
+    private final String botUsername = "t.me/Surebet_Player_top_bot";
+    private final String botToken = "8230679289:AAHmqLrp-mKV64j3wwaBil5TsOzcS0l1lFc";
+    private Long chatIdUtente = null;
 
     public static void main(String[] args) throws Exception {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
         BettingBot bot = new BettingBot();
         botsApi.registerBot(bot);
 
-        // Esegui ogni minuto
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(() -> bot.inviaQuoteAutomatiche(), 0, 1, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(bot::inviaQuoteAutomatiche, 0, 1, TimeUnit.MINUTES);
     }
 
     @Override
@@ -38,7 +36,7 @@ public class BettingBot extends TelegramLongPollingBot {
                 chatIdUtente = chatId;
                 sendMessage(chatId, "👋 Benvenuto! Ti invierò le quote ogni minuto.");
             } else if (text.equals("/quote")) {
-                sendMessage(chatId, QuoteFetcher.getQuotes());
+                sendMessage(chatId, QuoteFetcher.getFinderSurebets());
             } else {
                 sendMessage(chatId, "Scrivi /quote per vedere le quote o /start per iniziare.");
             }
@@ -47,17 +45,14 @@ public class BettingBot extends TelegramLongPollingBot {
 
     private void inviaQuoteAutomatiche() {
         if (chatIdUtente != null) {
-            String quote = QuoteFetcher.getQuotes();
-            sendMessage(chatIdUtente, quote);
+            sendMessage(chatIdUtente, QuoteFetcher.getFinderSurebets());
         }
     }
 
     private void sendMessage(Long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId.toString());
-        message.setText(text);
         try {
-            execute(message);
+            SendMessage msg = new SendMessage(chatId.toString(), text);
+            execute(msg);
         } catch (TelegramApiException e) {
             System.err.println("Errore invio messaggio: " + e.getMessage());
         }
