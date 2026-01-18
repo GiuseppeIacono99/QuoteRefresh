@@ -10,6 +10,8 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BettingBot extends TelegramLongPollingBot {
 
@@ -50,12 +52,45 @@ public class BettingBot extends TelegramLongPollingBot {
     }
 
     private void sendMessage(Long chatId, String text) {
+        if (text == null) return;
+        final int TELEGRAM_MAX = 4096;
         try {
-            SendMessage msg = new SendMessage(chatId.toString(), text);
-            execute(msg);
+            List<String> parts = splitMessage(text, TELEGRAM_MAX);
+            for (String part : parts) {
+                SendMessage msg = new SendMessage(chatId.toString(), part);
+                execute(msg);
+            }
         } catch (TelegramApiException e) {
             System.err.println("Errore invio messaggio: " + e.getMessage());
         }
+    }
+
+    private List<String> splitMessage(String text, int maxChars) {
+        List<String> parts = new ArrayList<>();
+        int cpCount = text.codePointCount(0, text.length());
+        int startCp = 0;
+
+        while (startCp < cpCount) {
+            int endCp = Math.min(startCp + maxChars, cpCount);
+            int startIndex = text.offsetByCodePoints(0, startCp);
+            int endIndex = text.offsetByCodePoints(0, endCp);
+
+            // prefer splitting at the last newline inside the chunk
+            int splitIndex = -1;
+            for (int i = endIndex; i > startIndex; i--) {
+                if (text.charAt(i - 1) == '\n') { splitIndex = i; break; }
+            }
+
+            if (splitIndex > startIndex) {
+                parts.add(text.substring(startIndex, splitIndex));
+                startCp = text.codePointCount(0, splitIndex);
+            } else {
+                parts.add(text.substring(startIndex, endIndex));
+                startCp = endCp;
+            }
+        }
+
+        return parts;
     }
 
     @Override
