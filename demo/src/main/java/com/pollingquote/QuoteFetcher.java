@@ -43,6 +43,23 @@ public class QuoteFetcher {
             List<Cookie> cookies = store.get(url.host());
             return cookies != null ? new ArrayList<>(cookies) : new ArrayList<>();
         }
+
+        public List<Cookie> getCookiesForHost(String host) {
+            List<Cookie> c = store.get(host);
+            return c != null ? new ArrayList<>(c) : new ArrayList<>();
+        }
+
+        public String dumpAllCookies() {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String, List<Cookie>> e : store.entrySet()) {
+                sb.append("Host: ").append(e.getKey()).append(" -> ");
+                for (Cookie c : e.getValue()) {
+                    sb.append(c.name()).append("=").append(c.value()).append("; ");
+                }
+                sb.append("\n");
+            }
+            return sb.toString();
+        }
     }
 
     private static final OkHttpClient client = new OkHttpClient.Builder()
@@ -201,14 +218,17 @@ public class QuoteFetcher {
             try (Response r = client.newCall(getPage).execute()) {
                 if (r.isSuccessful() && r.body() != null) {
                     String html = r.body().string();
+                    System.out.println("ensureLoggedIn: GET /playerbet/ returned " + r.code());
                     String nonce = extractNonce(html);
+                    System.out.println("ensureLoggedIn: nonce extracted (pre-login): " + (nonce != null ? nonce : "<none>"));
                     if (nonce != null) cachedNonce = nonce;
                 }
             }
 
             if (user == null || pass == null) return; // no creds => stop here
 
-            // perform login POST to wp-login.php
+                System.out.println("ensureLoggedIn: attempting login for user='" + (user == null ? "<null>" : user) + "'...");
+                // perform login POST to wp-login.php
             RequestBody form = new FormBody.Builder()
                     .add("log", user)
                     .add("pwd", pass)
@@ -222,7 +242,12 @@ public class QuoteFetcher {
                     .build();
 
             try (Response lr = client.newCall(loginReq).execute()) {
-                // ignore body; cookies stored in cookieManager
+                System.out.println("ensureLoggedIn: login POST returned " + lr.code());
+                // dump cookies after login
+                CookieJar jar = client.cookieJar();
+                if (jar instanceof SimpleCookieJar) {
+                    System.out.println("ensureLoggedIn: cookies after login:\n" + ((SimpleCookieJar) jar).dumpAllCookies());
+                }
             }
 
             // refresh page to get nonce after login
@@ -233,8 +258,20 @@ public class QuoteFetcher {
             try (Response r2 = client.newCall(getPage2).execute()) {
                 if (r2.isSuccessful() && r2.body() != null) {
                     String html2 = r2.body().string();
+                    System.out.println("ensureLoggedIn: GET /playerbet/ after login returned " + r2.code());
                     String nonce2 = extractNonce(html2);
+                    System.out.println("ensureLoggedIn: nonce extracted (post-login): " + (nonce2 != null ? nonce2 : "<none>"));
                     if (nonce2 != null) cachedNonce = nonce2;
+
+                    // quick heuristic: check if page contains 'logout' or username
+                    boolean looksLogged = false;
+                    if (html2.toLowerCase(Locale.ROOT).contains("logout") || (user != null && html2.contains(user))) {
+                        looksLogged = true;
+                    }
+                    System.out.println("ensureLoggedIn: page seems logged-in? " + looksLogged);
+                    if (!looksLogged) {
+                        System.err.println("ensureLoggedIn: login may have failed or additional protections exist.");
+                    }
                 }
             }
 
