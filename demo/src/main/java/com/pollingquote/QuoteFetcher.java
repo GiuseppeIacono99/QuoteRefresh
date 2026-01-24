@@ -120,6 +120,13 @@ public class QuoteFetcher {
                       .append(" | Quota Max: ").append(event.optString("valore_max")).append("\n");
                     sb.append("⏱ Durata: ").append(event.optString("durata_surebet")).append("\n");
 
+                        // decode and include the 'desc' field (base64-encoded) as the giocata
+                        if (event.has("desc")) {
+                            String encodedDesc = event.optString("desc");
+                            String desc = decodeMaybeBase64(encodedDesc);
+                            sb.append("🎯 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n");
+                        }
+
                     /* ===== ITEMS INTERNI ===== */
                     if (event.has("items")) {
                         try {
@@ -132,6 +139,13 @@ public class QuoteFetcher {
                                   .append(" @ ")
                                   .append(formatQuota(b.optString("value")))
                                   .append("\n");
+
+                                    // if this inner item has its own desc, decode and include it
+                                    if (b.has("desc")) {
+                                        String bEnc = b.optString("desc");
+                                        String bDesc = decodeMaybeBase64(bEnc);
+                                        sb.append("      Giocata: ").append(bDesc != null ? bDesc : "[non decodificabile]").append("\n");
+                                    }
                             }
                         } catch (Exception e) {
                             sb.append("⚠️ Bookmakers non leggibili\n");
@@ -268,5 +282,58 @@ public class QuoteFetcher {
 
     private static String ua() {
         return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
+    }
+
+    private static String decodeMaybeBase64(String encoded) {
+        if (encoded == null) return null;
+        String s = encoded.trim();
+        if (s.isEmpty()) return null;
+
+        // strip surrounding quotes if present
+        if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+
+        // strip data:...;base64, prefix
+        int idx = s.indexOf("base64,");
+        if (idx != -1) {
+            s = s.substring(idx + 7);
+        }
+
+        // try multiple decoding strategies
+        String[] candidates = new String[4];
+        candidates[0] = s;
+        // try unescape JSON sequences
+        try { candidates[1] = StringEscapeUtils.unescapeJson(s); } catch (Exception ignore) { candidates[1] = null; }
+        // url-safe adjustment
+        String urlSafe = s.replace('-', '+').replace('_', '/');
+        int pad = (4 - (urlSafe.length() % 4)) % 4;
+        StringBuilder sb = new StringBuilder(urlSafe);
+        for (int i = 0; i < pad; i++) sb.append('=');
+        candidates[2] = sb.toString();
+        // unescaped url-safe
+        try { candidates[3] = StringEscapeUtils.unescapeJson(candidates[2]); } catch (Exception ignore) { candidates[3] = null; }
+
+        for (String cand : candidates) {
+            if (cand == null || cand.isEmpty()) continue;
+            try {
+                byte[] decoded = Base64.getDecoder().decode(cand);
+                String res = new String(decoded, StandardCharsets.UTF_8).trim();
+                // sanity check: must contain printable chars
+                if (res.chars().anyMatch(ch -> ch >= 32)) {
+                    return res;
+                }
+            } catch (IllegalArgumentException ignore) {
+                // try next
+            }
+        }
+
+        // final fallback: return unescaped input if it looks like plain text
+        try {
+            String rawUnesc = StringEscapeUtils.unescapeJson(s);
+            if (rawUnesc.chars().anyMatch(ch -> ch >= 32)) return rawUnesc;
+        } catch (Exception ignore) {}
+
+        return null;
     }
 }
