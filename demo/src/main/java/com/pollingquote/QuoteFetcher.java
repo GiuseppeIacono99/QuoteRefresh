@@ -90,6 +90,10 @@ public class QuoteFetcher {
                 }
 
                 String body = res.body().string();
+
+                // Log raw JSON from FinderBet for debugging
+                System.out.println("[FinderBet JSON] " + body);
+
                 JSONObject json = new JSONObject(body);
 
                 if (!json.has("items")) {
