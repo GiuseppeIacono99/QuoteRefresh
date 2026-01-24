@@ -375,7 +375,8 @@ public class QuoteFetcher {
             sb.append(event.optString("profitto", "")).append('|');
             sb.append(event.optString("valore_min", "")).append('|');
             sb.append(event.optString("valore_max", "")).append('|');
-            sb.append(event.optString("durata_surebet", "")).append('|');
+            // NOTE: intentionally NOT including durata_surebet to avoid treating
+            // the same quote as different when only the duration changes.
             String desc = null;
             if (event.has("desc")) desc = decodeMaybeBase64(event.optString("desc"));
             sb.append(desc != null ? desc : "").append('|');
