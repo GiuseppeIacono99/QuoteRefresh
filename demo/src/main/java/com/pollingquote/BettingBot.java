@@ -9,6 +9,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,14 +19,13 @@ public class BettingBot extends TelegramLongPollingBot {
     private final String botUsername = "t.me/Surebet_Player_top_bot";
     private final String botToken = "8230679289:AAHmqLrp-mKV64j3wwaBil5TsOzcS0l1lFc";
     private Long chatIdUtente = null;
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private volatile ScheduledFuture<?> scheduledTask = null;
 
     public static void main(String[] args) throws Exception {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
         BettingBot bot = new BettingBot();
         botsApi.registerBot(bot);
-
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(bot::inviaQuoteAutomatiche, 0, 1, TimeUnit.MINUTES);
     }
 
     @Override
@@ -36,7 +36,24 @@ public class BettingBot extends TelegramLongPollingBot {
 
             if (text.equals("/start")) {
                 chatIdUtente = chatId;
-                sendMessage(chatId, "👋 Benvenuto! Ti invierò le quote ogni minuto.");
+
+                // invia messaggio di benvenuto
+                sendMessage(chatId, "👋 Benvenuto! Ti invierò le quote ogni 15 secondi.");
+
+                // invia subito le quote
+                sendMessage(chatId, QuoteFetcher.getFinderSurebets());
+
+                // (ri)avvia la schedulazione ogni 15 secondi, evitando doppie schedulazioni
+                synchronized (this) {
+                    if (scheduledTask != null && !scheduledTask.isCancelled()) {
+                        scheduledTask.cancel(false);
+                    }
+                    scheduledTask = scheduler.scheduleAtFixedRate(() -> {
+                        if (chatIdUtente != null) {
+                            sendMessage(chatIdUtente, QuoteFetcher.getFinderSurebets());
+                        }
+                    }, 15, 15, TimeUnit.SECONDS);
+                }
             } else if (text.equals("/quote")) {
                 sendMessage(chatId, QuoteFetcher.getFinderSurebets());
             } else {
