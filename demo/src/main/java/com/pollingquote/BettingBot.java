@@ -70,6 +70,9 @@ public class BettingBot extends TelegramLongPollingBot {
 
     private void sendMessage(Long chatId, String text) {
         if (text == null) return;
+
+        // don't send the 'no new surebet' informational message
+        if (text.trim().equals("ℹ️ Nessuna nuova surebet da inviare")) return;
         final int TELEGRAM_MAX = 4096;
         try {
             List<String> parts = splitMessage(text, TELEGRAM_MAX);
