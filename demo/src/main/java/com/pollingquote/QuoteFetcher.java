@@ -9,6 +9,8 @@ import org.apache.commons.text.StringEscapeUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,6 +69,8 @@ public class QuoteFetcher {
             .build();
 
     private static String wpNonce;
+    private static final ConcurrentHashMap<String, Long> sentMap = new ConcurrentHashMap<>();
+    private static final long SENT_RETENTION_MS = 24L * 60L * 60L * 1000L; // 24 hours
 
     /* ================= PUBLIC API ================= */
 
@@ -108,9 +112,16 @@ public class QuoteFetcher {
 
                 StringBuilder sb = new StringBuilder();
 
+                int added = 0;
+                purgeOldSent();
                 for (int i = 0; i < events.length(); i++) {
 
                     JSONObject event = events.getJSONObject(i);
+
+                    String eventHash = computeEventHash(event);
+                    if (eventHash != null && sentMap.containsKey(eventHash)) {
+                        continue; // already sent
+                    }
 
                     sb.append("🏟 Evento: ").append(event.optString("gruppo_evento")).append("\n");
                     sb.append("🎮 Match: ").append(event.optString("nome_evento")).append("\n");
@@ -169,6 +180,14 @@ public class QuoteFetcher {
                     }
 
                     sb.append("------------------------------------------------\n");
+                    if (eventHash != null) {
+                        sentMap.put(eventHash, System.currentTimeMillis());
+                    }
+                    added++;
+                }
+
+                if (added == 0) {
+                    return "ℹ️ Nessuna nuova surebet da inviare";
                 }
 
                 return sb.toString();
@@ -335,5 +354,53 @@ public class QuoteFetcher {
         } catch (Exception ignore) {}
 
         return null;
+    }
+
+    private static void purgeOldSent() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, Long> e : sentMap.entrySet()) {
+            if (e.getValue() + SENT_RETENTION_MS < now) {
+                sentMap.remove(e.getKey());
+            }
+        }
+    }
+
+    private static String computeEventHash(JSONObject event) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            StringBuilder sb = new StringBuilder();
+            sb.append(event.optString("gruppo_evento", "")).append('|');
+            sb.append(event.optString("nome_evento", "")).append('|');
+            sb.append(event.optString("player_name", "")).append('|');
+            sb.append(event.optString("profitto", "")).append('|');
+            sb.append(event.optString("valore_min", "")).append('|');
+            sb.append(event.optString("valore_max", "")).append('|');
+            sb.append(event.optString("durata_surebet", "")).append('|');
+            String desc = null;
+            if (event.has("desc")) desc = decodeMaybeBase64(event.optString("desc"));
+            sb.append(desc != null ? desc : "").append('|');
+
+            // include inner items
+            if (event.has("items")) {
+                try {
+                    JSONArray inner = parseItems(event.get("items"));
+                    for (int j = 0; j < inner.length(); j++) {
+                        JSONObject b = inner.getJSONObject(j);
+                        sb.append(b.optString("bname", "")).append('@').append(b.optString("value", "")).append('|');
+                        if (b.has("desc")) {
+                            String bd = decodeMaybeBase64(b.optString("desc"));
+                            sb.append(bd != null ? bd : "").append('|');
+                        }
+                    }
+                } catch (Exception ignore) {}
+            }
+
+            byte[] digest = md.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) hex.append(String.format("%02x", b & 0xff));
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return null;
+        }
     }
 }
