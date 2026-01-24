@@ -22,12 +22,36 @@ public class QuoteFetcher {
 
         @Override
         public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
-            store.computeIfAbsent(url.host(), h -> new ArrayList<>()).addAll(cookies);
+            List<Cookie> list = store.computeIfAbsent(url.host(), h -> new ArrayList<>());
+            for (Cookie c : cookies) {
+                // remove existing cookie with same name + path to avoid duplicates
+                list.removeIf(existing -> existing.name().equals(c.name()) && Objects.equals(existing.path(), c.path()));
+                list.add(c);
+            }
         }
 
         @Override
         public List<Cookie> loadForRequest(HttpUrl url) {
-            return store.getOrDefault(url.host(), Collections.emptyList());
+            long now = System.currentTimeMillis();
+            List<Cookie> list = store.getOrDefault(url.host(), Collections.emptyList());
+            List<Cookie> valid = new ArrayList<>();
+            for (Cookie c : list) {
+                if (c.expiresAt() >= now) valid.add(c);
+            }
+            return valid;
+        }
+
+        public boolean hasValidLoginCookie() {
+            long now = System.currentTimeMillis();
+            for (List<Cookie> lists : store.values()) {
+                for (Cookie c : lists) {
+                    String name = c.name();
+                    if ((name != null && name.startsWith("wordpress_logged_in")) && c.expiresAt() >= now) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     }
 
@@ -37,8 +61,9 @@ public class QuoteFetcher {
     private static final String USER = "andreaschembari2@gmail.com";
     private static final String PASS = "Porcamadonna12";
 
-    private static final OkHttpClient client = new OkHttpClient.Builder()
-            .cookieJar(new MemoryCookieJar())
+        private static final MemoryCookieJar cookieJar = new MemoryCookieJar();
+        private static final OkHttpClient client = new OkHttpClient.Builder()
+            .cookieJar(cookieJar)
             .build();
 
     private static String wpNonce;
@@ -139,8 +164,12 @@ public class QuoteFetcher {
     /* ================= LOGIN & INIT ================= */
 
     private static void loginAndInit() throws IOException {
+        // If we already have a valid login cookie and a nonce, skip login
+        if (cookieJar.hasValidLoginCookie() && wpNonce != null) {
+            return;
+        }
 
-        // init cookies
+        // initial GET to obtain any pre-login cookies
         get(BASE + "/playerbet/");
 
         // login
@@ -157,7 +186,9 @@ public class QuoteFetcher {
                 .header("User-Agent", ua())
                 .build();
 
-        client.newCall(login).execute().close();
+        try (Response r = client.newCall(login).execute()) {
+            // consume response to allow cookies to be saved; no further action required
+        }
 
         // reload page and extract nonce
         String html = get(BASE + "/playerbet/");
