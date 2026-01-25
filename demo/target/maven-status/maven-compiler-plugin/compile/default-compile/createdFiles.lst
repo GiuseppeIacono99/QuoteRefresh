@@ -1,2 +1,3 @@
-com\pollingquote\Main.class
+com\pollingquote\QuoteFetcher$MemoryCookieJar.class
+com\pollingquote\BettingBot.class
 com\pollingquote\QuoteFetcher.class

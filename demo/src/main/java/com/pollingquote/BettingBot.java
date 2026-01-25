@@ -38,7 +38,7 @@ public class BettingBot extends TelegramLongPollingBot {
                 chatIdUtente = chatId;
 
                 // invia messaggio di benvenuto
-                sendMessage(chatId, "👋 Benvenuto! Ti invierò le quote ogni 15 secondi.");
+                sendMessage(chatId, "👋 Benvenuto! Ti invierò le quote ogni 15 secondi (se presenti).");
 
                 // invia subito le quote
                 if(QuoteFetcher.getFinderSurebets() != "ℹ️ Nessuna surebet trovata"){
