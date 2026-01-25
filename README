@@ -11,152 +11,50 @@
 --
 
 
-Perfetto 💪 ottima scelta — fare un bot Telegram in Java che recupera periodicamente le quote da un sito di scommesse è assolutamente fattibile.
+Agggiornare immagine di docker
 
-Ti spiego passo per passo come impostare il progetto completo in Java, con esempio di codice e librerie giuste 👇
+1️⃣ Ricostruisci il JAR con il nuovo codice
 
-🧰 1️⃣ Dipendenze e librerie necessarie
+Assumendo che tu stia usando Maven:
 
-Nel mondo Java, la libreria più comoda per creare bot Telegram è:
-👉 telegrambots
+mvn clean package
 
-Per fare chiamate HTTP al sito di scommesse puoi usare:
-👉 OkHttp (o anche HttpClient di Java 11+)
 
-Per l’esecuzione periodica (ogni minuto) puoi usare:
-👉 ScheduledExecutorService
+Questo genera un nuovo JAR eseguibile in target/ (es. target/demo-1.0-SNAPSHOT.jar)
 
-Esempio pom.xml (per Maven)
-<dependencies>
-    <dependency>
-        <groupId>org.telegram</groupId>
-        <artifactId>telegrambots</artifactId>
-        <version>6.9.7</version>
-    </dependency>
+Assicurati che il manifest contenga ancora:
 
-    <dependency>
-        <groupId>com.squareup.okhttp3</groupId>
-        <artifactId>okhttp</artifactId>
-        <version>4.12.0</version>
-    </dependency>
-</dependencies>
+Main-Class: org.springframework.boot.loader.JarLauncher
+Start-Class: com.pollingquote.BettingBot
 
-🧠 2️⃣ Struttura del progetto
-src/
- └── main/java/
-      ├── com/example/telegrambot/
-      │     ├── QuoteFetcher.java
-      │     └── BettingBot.java
- └── resources/
-       └── application.properties
 
-⚙️ 3️⃣ QuoteFetcher.java — recupera le quote
+Puoi controllare con:
 
-Ecco un esempio semplice con OkHttp (puoi adattarlo all’API reale o a scraping HTML).
+jar xf target/demo-1.0-SNAPSHOT.jar META-INF/MANIFEST.MF
+type META-INF\MANIFEST.MF
 
-package com.example.telegrambot;
+2️⃣ Ricostruisci l’immagine Docker
 
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+Se il tuo Dockerfile è già pronto (come quello che usavi):
 
-public class QuoteFetcher {
-    private static final OkHttpClient client = new OkHttpClient();
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY target/demo-1.0-SNAPSHOT.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
 
-    public static String getQuotes() {
-        try {
-            String url = "https://esempio-scommesse.com/api/quote?match=juventus-inter";
-            Request request = new Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "QuoteBot/1.0")
-                    .build();
 
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    return "❌ Errore HTTP: " + response.code();
-                }
+Builda una nuova immagine, ad esempio con tag 1.1 per indicare l’aggiornamento:
 
-                String body = response.body().string();
-                // Qui puoi fare parsing JSON se il sito restituisce quote in formato JSON
-                return "📊 Quote aggiornate: " + body;
-            }
-        } catch (Exception e) {
-            return "❌ Errore nel recupero quote: " + e.getMessage();
-        }
-    }
-}
+docker build -t quote-refresh:1.1 .
 
-🤖 4️⃣ BettingBot.java — il bot Telegram
-package com.example.telegrambot;
+3️⃣ (Opzionale) Tagga per Docker Hub
 
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.TelegramBotsApi;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
+Se vuoi aggiornare l’immagine su Docker Hub:
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+docker tag quote-refresh:1.1 giuseppeiacono1999/quote-refresh:1.1
 
-public class BettingBot extends TelegramLongPollingBot {
-    private final String botUsername = "NOME_DEL_TUO_BOT";
-    private final String botToken = "INSERISCI_IL_TUO_TOKEN_QUI";
-    private Long chatIdUtente = null;  // salva chi ha fatto /start
+4️⃣ Pusha su Docker Hub
+docker push giuseppeiacono1999/quote-refresh:1.1
 
-    public static void main(String[] args) throws Exception {
-        TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-        BettingBot bot = new BettingBot();
-        botsApi.registerBot(bot);
 
-        // Esegui ogni minuto
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(() -> bot.inviaQuoteAutomatiche(), 0, 1, TimeUnit.MINUTES);
-    }
-
-    @Override
-    public void onUpdateReceived(Update update) {
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            String text = update.getMessage().getText();
-            Long chatId = update.getMessage().getChatId();
-
-            if (text.equals("/start")) {
-                chatIdUtente = chatId;
-                sendMessage(chatId, "👋 Benvenuto! Ti invierò le quote ogni minuto.");
-            } else if (text.equals("/quote")) {
-                sendMessage(chatId, QuoteFetcher.getQuotes());
-            } else {
-                sendMessage(chatId, "Scrivi /quote per vedere le quote o /start per iniziare.");
-            }
-        }
-    }
-
-    private void inviaQuoteAutomatiche() {
-        if (chatIdUtente != null) {
-            String quote = QuoteFetcher.getQuotes();
-            sendMessage(chatIdUtente, quote);
-        }
-    }
-
-    private void sendMessage(Long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId.toString());
-        message.setText(text);
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            System.err.println("Errore invio messaggio: " + e.getMessage());
-        }
-    }
-
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    @Override
-    public String getBotToken() {
-        return botToken;
-    }
-}
+Ora la nuova versione è disponibile online.
