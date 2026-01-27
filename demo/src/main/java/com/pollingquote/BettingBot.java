@@ -61,7 +61,7 @@ public class BettingBot extends TelegramLongPollingBot {
 
         // Invia subito le quote
         String immediateQuote = QuoteFetcher.getFinderSurebets();
-        if (!"ℹ️ Nessuna surebet trovata".equals(immediateQuote)) {
+        if (!"Nessuna surebet trovata".equals(immediateQuote)) {
             sendMessage(chatId, immediateQuote);
         }
 

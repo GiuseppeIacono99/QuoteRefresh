@@ -26,7 +26,6 @@ public class QuoteFetcher {
         public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
             List<Cookie> list = store.computeIfAbsent(url.host(), h -> new ArrayList<>());
             for (Cookie c : cookies) {
-                // remove existing cookie with same name + path to avoid duplicates
                 list.removeIf(existing -> existing.name().equals(c.name()) && Objects.equals(existing.path(), c.path()));
                 list.add(c);
             }
@@ -63,8 +62,8 @@ public class QuoteFetcher {
     private static final String USER = "andreaschembari2@gmail.com";
     private static final String PASS = "Porcamadonna12";
 
-        private static final MemoryCookieJar cookieJar = new MemoryCookieJar();
-        private static final OkHttpClient client = new OkHttpClient.Builder()
+    private static final MemoryCookieJar cookieJar = new MemoryCookieJar();
+    private static final OkHttpClient client = new OkHttpClient.Builder()
             .cookieJar(cookieJar)
             .build();
 
@@ -75,7 +74,6 @@ public class QuoteFetcher {
     /* ================= PUBLIC API ================= */
 
     public static String getFinderSurebets() {
-
         try {
             loginAndInit();
 
@@ -87,15 +85,13 @@ public class QuoteFetcher {
                     .build();
 
             Request req = ajaxRequest(url);
-            try (Response res = client.newCall(req).execute()) {
+            try (Response res = callWithRetry(req)) {
 
                 if (!res.isSuccessful()) {
                     return "❌ HTTP " + res.code() + " - " + res.message();
                 }
 
                 String body = res.body().string();
-
-                // Log raw JSON from FinderBet for debugging
                 System.out.println("[FinderBet JSON] " + body);
 
                 JSONObject json = new JSONObject(body);
@@ -107,38 +103,32 @@ public class QuoteFetcher {
                 JSONArray events = parseItems(json.get("items"));
 
                 if (events.length() == 0) {
-                    return "ℹ️ Nessuna surebet trovata";
+                    return "Nessuna surebet trovata";
                 }
 
                 StringBuilder sb = new StringBuilder();
-
                 int added = 0;
                 purgeOldSent();
                 for (int i = 0; i < events.length(); i++) {
-
                     JSONObject event = events.getJSONObject(i);
 
                     String eventHash = computeEventHash(event);
-                    if (eventHash != null && sentMap.containsKey(eventHash)) {
-                        continue; // already sent
-                    }
+                    if (eventHash != null && sentMap.containsKey(eventHash)) continue;
 
                     sb.append("🏟 Evento: ").append(event.optString("gruppo_evento")).append("\n");
                     sb.append("🎮 Match: ").append(event.optString("nome_evento")).append("\n");
                     sb.append("👤 Giocatore: ").append(event.optString("player_name")).append("\n");
                     sb.append("📈 Profitto: ").append(event.optString("profitto")).append("%\n");
                     sb.append("💰 Quota Min: ").append(event.optString("valore_min"))
-                      .append(" | Quota Max: ").append(event.optString("valore_max")).append("\n");
+                            .append(" | Quota Max: ").append(event.optString("valore_max")).append("\n");
                     sb.append("⏱ Durata: ").append(event.optString("durata_surebet")).append("\n");
 
-                        // decode and include the 'desc' field (base64-encoded) as the giocata
-                        if (event.has("desc")) {
-                            String encodedDesc = event.optString("desc");
-                            String desc = decodeMaybeBase64(encodedDesc);
-                            sb.append("🎯 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n");
-                        }
+                    if (event.has("desc")) {
+                        String encodedDesc = event.optString("desc");
+                        String desc = decodeMaybeBase64(encodedDesc);
+                        sb.append("🎯 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n");
+                    }
 
-                    /* ===== ITEMS INTERNI ===== */
                     if (event.has("items")) {
                         try {
                             JSONArray inner = parseItems(event.get("items"));
@@ -146,24 +136,22 @@ public class QuoteFetcher {
                             for (int j = 0; j < inner.length(); j++) {
                                 JSONObject b = inner.getJSONObject(j);
                                 sb.append("   → ")
-                                  .append(b.optString("bname"))
-                                  .append(" @ ")
-                                  .append(formatQuota(b.optString("value")))
-                                  .append("\n");
+                                        .append(b.optString("bname"))
+                                        .append(" @ ")
+                                        .append(formatQuota(b.optString("value")))
+                                        .append("\n");
 
-                                    // if this inner item has its own desc, decode and include it
-                                    if (b.has("desc")) {
-                                        String bEnc = b.optString("desc");
-                                        String bDesc = decodeMaybeBase64(bEnc);
-                                        sb.append("      Giocata: ").append(bDesc != null ? bDesc : "[non decodificabile]").append("\n");
-                                    }
+                                if (b.has("desc")) {
+                                    String bEnc = b.optString("desc");
+                                    String bDesc = decodeMaybeBase64(bEnc);
+                                    sb.append("      Giocata: ").append(bDesc != null ? bDesc : "[non decodificabile]").append("\n");
+                                }
                             }
                         } catch (Exception e) {
                             sb.append("⚠️ Bookmakers non leggibili\n");
                         }
                     }
 
-                    /* ===== BOOKMAKERS CONSOLIDATI ===== */
                     if (event.has("bookmakers")) {
                         JSONArray bookmakers = event.optJSONArray("bookmakers");
                         if (bookmakers != null) {
@@ -171,26 +159,22 @@ public class QuoteFetcher {
                             for (int k = 0; k < bookmakers.length(); k++) {
                                 JSONObject b = bookmakers.getJSONObject(k);
                                 sb.append("   🔗 ")
-                                  .append(b.optString("bname"))
-                                  .append(" | quota ")
-                                  .append(formatQuota(b.optString("value")))
-                                  .append("\n");
+                                        .append(b.optString("bname"))
+                                        .append(" | quota ")
+                                        .append(formatQuota(b.optString("value")))
+                                        .append("\n");
                             }
                         }
                     }
 
                     sb.append("------------------------------------------------\n");
-                    if (eventHash != null) {
-                        sentMap.put(eventHash, System.currentTimeMillis());
-                    }
+                    if (eventHash != null) sentMap.put(eventHash, System.currentTimeMillis());
                     added++;
                 }
 
-                if (added == 0) {
-                    return "ℹ️ Nessuna nuova surebet da inviare";
-                }
-
+                if (added == 0) return "ℹ️ Nessuna nuova surebet da inviare";
                 return sb.toString();
+
             }
 
         } catch (Exception e) {
@@ -201,15 +185,10 @@ public class QuoteFetcher {
     /* ================= LOGIN & INIT ================= */
 
     private static void loginAndInit() throws IOException {
-        // If we already have a valid login cookie and a nonce, skip login
-        if (cookieJar.hasValidLoginCookie() && wpNonce != null) {
-            return;
-        }
+        if (cookieJar.hasValidLoginCookie() && wpNonce != null) return;
 
-        // initial GET to obtain any pre-login cookies
         get(BASE + "/playerbet/");
 
-        // login
         RequestBody form = new FormBody.Builder()
                 .add("log", USER)
                 .add("pwd", PASS)
@@ -223,17 +202,33 @@ public class QuoteFetcher {
                 .header("User-Agent", ua())
                 .build();
 
-        try (Response r = client.newCall(login).execute()) {
-            // consume response to allow cookies to be saved; no further action required
-        }
+        try (Response r = client.newCall(login).execute()) {}
 
-        // reload page and extract nonce
         String html = get(BASE + "/playerbet/");
         wpNonce = extractNonce(html);
 
-        if (wpNonce == null) {
-            throw new IllegalStateException("Nonce non trovato");
+        if (wpNonce == null) throw new IllegalStateException("Nonce non trovato");
+    }
+
+    /* ================= CALL WITH RETRY (GESTIONE 403) ================= */
+
+    private static Response callWithRetry(Request req) throws IOException {
+        Response res = client.newCall(req).execute();
+
+        if (res.code() == 403) {
+            res.close();
+
+            // reset nonce
+            wpNonce = null;
+
+            // rifai login + init
+            loginAndInit();
+
+            // riprova una sola volta
+            return client.newCall(req).execute();
         }
+
+        return res;
     }
 
     /* ================= HELPERS ================= */
@@ -262,21 +257,18 @@ public class QuoteFetcher {
 
     private static String extractNonce(String html) {
         Pattern p = Pattern.compile(
-                "wpApiSettings\\s*=\\s*\\{[^}]*\"nonce\"\\s*:\\s*\"([a-zA-Z0-9]+)\"");
+                "wpApiSettings\\s*=\\s*\\{[^}]*\"nonce\"\\s*:\\s*\"([a-zA-Z0-9]+)\""
+        );
         Matcher m = p.matcher(html);
         return m.find() ? m.group(1) : null;
     }
 
     private static JSONArray parseItems(Object obj) {
-
-        if (obj instanceof JSONArray) {
-            return (JSONArray) obj;
-        }
+        if (obj instanceof JSONArray) return (JSONArray) obj;
 
         String raw = obj.toString().trim();
         raw = StringEscapeUtils.unescapeJson(raw);
 
-        // base64 fallback
         if (!raw.startsWith("[")) {
             try {
                 byte[] decoded = Base64.getDecoder().decode(raw);
@@ -308,29 +300,21 @@ public class QuoteFetcher {
         String s = encoded.trim();
         if (s.isEmpty()) return null;
 
-        // strip surrounding quotes if present
         if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
             s = s.substring(1, s.length() - 1).trim();
         }
 
-        // strip data:...;base64, prefix
         int idx = s.indexOf("base64,");
-        if (idx != -1) {
-            s = s.substring(idx + 7);
-        }
+        if (idx != -1) s = s.substring(idx + 7);
 
-        // try multiple decoding strategies
         String[] candidates = new String[4];
         candidates[0] = s;
-        // try unescape JSON sequences
         try { candidates[1] = StringEscapeUtils.unescapeJson(s); } catch (Exception ignore) { candidates[1] = null; }
-        // url-safe adjustment
         String urlSafe = s.replace('-', '+').replace('_', '/');
         int pad = (4 - (urlSafe.length() % 4)) % 4;
         StringBuilder sb = new StringBuilder(urlSafe);
         for (int i = 0; i < pad; i++) sb.append('=');
         candidates[2] = sb.toString();
-        // unescaped url-safe
         try { candidates[3] = StringEscapeUtils.unescapeJson(candidates[2]); } catch (Exception ignore) { candidates[3] = null; }
 
         for (String cand : candidates) {
@@ -338,16 +322,10 @@ public class QuoteFetcher {
             try {
                 byte[] decoded = Base64.getDecoder().decode(cand);
                 String res = new String(decoded, StandardCharsets.UTF_8).trim();
-                // sanity check: must contain printable chars
-                if (res.chars().anyMatch(ch -> ch >= 32)) {
-                    return res;
-                }
-            } catch (IllegalArgumentException ignore) {
-                // try next
-            }
+                if (res.chars().anyMatch(ch -> ch >= 32)) return res;
+            } catch (IllegalArgumentException ignore) {}
         }
 
-        // final fallback: return unescaped input if it looks like plain text
         try {
             String rawUnesc = StringEscapeUtils.unescapeJson(s);
             if (rawUnesc.chars().anyMatch(ch -> ch >= 32)) return rawUnesc;
@@ -359,9 +337,7 @@ public class QuoteFetcher {
     private static void purgeOldSent() {
         long now = System.currentTimeMillis();
         for (Map.Entry<String, Long> e : sentMap.entrySet()) {
-            if (e.getValue() + SENT_RETENTION_MS < now) {
-                sentMap.remove(e.getKey());
-            }
+            if (e.getValue() + SENT_RETENTION_MS < now) sentMap.remove(e.getKey());
         }
     }
 
@@ -375,13 +351,10 @@ public class QuoteFetcher {
             sb.append(event.optString("profitto", "")).append('|');
             sb.append(event.optString("valore_min", "")).append('|');
             sb.append(event.optString("valore_max", "")).append('|');
-            // NOTE: intentionally NOT including durata_surebet to avoid treating
-            // the same quote as different when only the duration changes.
             String desc = null;
             if (event.has("desc")) desc = decodeMaybeBase64(event.optString("desc"));
             sb.append(desc != null ? desc : "").append('|');
 
-            // include inner items
             if (event.has("items")) {
                 try {
                     JSONArray inner = parseItems(event.get("items"));
