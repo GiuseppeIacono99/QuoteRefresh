@@ -11,7 +11,6 @@ import java.util.concurrent.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class BettingBot extends TelegramLongPollingBot {
 
@@ -72,7 +71,10 @@ public class BettingBot extends TelegramLongPollingBot {
             }
 
             return scheduler.scheduleAtFixedRate(() -> {
-                sendMessage(id, QuoteFetcher.getFinderSurebets());
+                String quote = QuoteFetcher.getFinderSurebets();
+                if (!"Nessuna surebet trovata".equals(quote)) {
+                    sendMessage(id, quote);
+                }
             }, 15, 15, TimeUnit.SECONDS);
         });
     }

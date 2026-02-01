@@ -82,6 +82,47 @@ public class QuoteFetcher {
                     .addQueryParameter("orderBy", "profitto")
                     .addQueryParameter("order", "desc")
                     .addQueryParameter("page", "1")
+                    .addQueryParameter("profitto_min", "2")  //nuovo filtro aggiunto
+                    .addQueryParameter("inizio_evento_entro", "86400")  //nuovo filtro aggiunto
+                    .addQueryParameter("tipo_puntata", "tutti")  //nuovo filtro aggiunto
+                    .addQueryParameter("punti_in_comune", "0")  //nuovo filtro aggiunto
+                    // Basket
+                    .addQueryParameter("sports[]", "2")
+                    // Categorie NBA
+                    .addQueryParameter("categoria[]", "201")
+                    .addQueryParameter("categoria[]", "202")
+                    .addQueryParameter("categoria[]", "203")
+                    .addQueryParameter("categoria[]", "204")
+                    .addQueryParameter("categoria[]", "205")
+                    .addQueryParameter("categoria[]", "206")
+                    .addQueryParameter("categoria[]", "207")
+                    .addQueryParameter("categoria[]", "208")
+                    .addQueryParameter("categoria[]", "209")
+                    .addQueryParameter("categoria[]", "210")
+                    .addQueryParameter("categoria[]", "213")
+                    .addQueryParameter("categoria[]", "214")
+                    .addQueryParameter("categoria[]", "501")
+                    .addQueryParameter("categoria[]", "502")
+                    .addQueryParameter("bookmakers[]", "2")
+                    .addQueryParameter("bookmakers[]", "12")
+                    .addQueryParameter("bookmakers[]", "15")
+                    .addQueryParameter("bookmakers[]", "45")
+                    .addQueryParameter("bookmakers[]", "25")
+                    .addQueryParameter("bookmakers[]", "27")
+                    .addQueryParameter("confronto[]", "2")
+                    .addQueryParameter("confronto[]", "5")
+                    .addQueryParameter("confronto[]", "9")
+                    .addQueryParameter("confronto[]", "11")
+                    .addQueryParameter("confronto[]", "12")
+                    .addQueryParameter("confronto[]", "15")
+                    .addQueryParameter("confronto[]", "45")
+                    .addQueryParameter("confronto[]", "25")
+                    .addQueryParameter("confronto[]", "27")
+                    .addQueryParameter("confronto[]", "38")
+                    .addQueryParameter("sports[]", "2")
+                    .addQueryParameter("sports[]", "1")
+                    .addQueryParameter("sports[]", "4")
+                    .addQueryParameter("sports[]", "5")
                     .build();
 
             Request req = ajaxRequest(url);
@@ -92,7 +133,7 @@ public class QuoteFetcher {
                 }
 
                 String body = res.body().string();
-                System.out.println("[FinderBet JSON] " + body);
+                System.out.println("[FinderBet JSON] richiesta completata");
 
                 JSONObject json = new JSONObject(body);
 
