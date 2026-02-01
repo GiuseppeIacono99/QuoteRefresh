@@ -150,64 +150,64 @@ public class QuoteFetcher {
                 StringBuilder sb = new StringBuilder();
                 int added = 0;
                 purgeOldSent();
-for (int i = 0; i < events.length(); i++) {
-    JSONObject event = events.getJSONObject(i);
+                for (int i = 0; i < events.length(); i++) {
+                    JSONObject event = events.getJSONObject(i);
 
-    String eventHash = computeEventHash(event);
-    if (eventHash != null && sentMap.containsKey(eventHash)) continue;
+                    String eventHash = computeEventHash(event);
+                    if (eventHash != null && sentMap.containsKey(eventHash)) continue;
 
-    // 🔹 Header evento
-    sb.append("🏆 NUOVA SUROBET: ").append(event.optString("valore_min")).append("\n");
-    sb.append("📌 Evento: ").append(event.optString("gruppo_evento")).append("\n");
-    sb.append("🎮 Match: ").append(event.optString("nome_evento")).append("\n");
-    sb.append("👤 Giocatore: ").append(event.optString("player_name")).append("\n\n");
+                    // 🔹 Header evento
+                    sb.append("🏆 NUOVA SUROBET: ").append(event.optString("valore_min")).append("\n");
+                    sb.append("📌 Evento: ").append(event.optString("gruppo_evento")).append("\n");
+                    sb.append("🎮 Match: ").append(event.optString("nome_evento")).append("\n");
+                    sb.append("👤 Giocatore: ").append(event.optString("player_name")).append("\n\n");
 
-    // 🔹 Giocata
-    if (event.has("desc")) {
-        String encodedDesc = event.optString("desc");
-        String desc = decodeMaybeBase64(encodedDesc);
-        sb.append("💡 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n\n");
-    }
+                    // 🔹 Giocata
+                    if (event.has("desc")) {
+                        String encodedDesc = event.optString("desc");
+                        String desc = decodeMaybeBase64(encodedDesc);
+                        sb.append("💡 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n\n");
+                    }
 
-    // 🔹 Bookmakers
-    if (event.has("items")) {
-        try {
-            JSONArray inner = parseItems(event.get("items"));
-            sb.append("📌 Bookmakers:\n");
+                    // 🔹 Bookmakers
+                    if (event.has("items")) {
+                        try {
+                            JSONArray inner = parseItems(event.get("items"));
+                            sb.append("📌 Bookmakers:\n");
 
-            for (int j = 0; j < inner.length(); j++) {
-                JSONObject b = inner.getJSONObject(j);
+                            for (int j = 0; j < inner.length(); j++) {
+                                JSONObject b = inner.getJSONObject(j);
 
-                sb.append("   → ")
-                  .append(b.optString("bname"))
-                  .append(" @ ")
-                  .append(formatQuota(b.optString("value")))
-                  .append("\n");
+                                sb.append("   → ")
+                                .append(b.optString("bname"))
+                                .append(" @ ")
+                                .append(formatQuota(b.optString("value")))
+                                .append("\n");
 
-                if (b.has("desc")) {
-                    String bEnc = b.optString("desc");
-                    String bDesc = decodeMaybeBase64(bEnc);
-                    sb.append("      Giocata: ")
-                      .append(bDesc != null ? bDesc : "[non decodificabile]")
-                      .append("\n");
+                                if (b.has("desc")) {
+                                    String bEnc = b.optString("desc");
+                                    String bDesc = decodeMaybeBase64(bEnc);
+                                    sb.append("      Giocata: ")
+                                    .append(bDesc != null ? bDesc : "[non decodificabile]")
+                                    .append("\n");
+                                }
+                            }
+
+                            sb.append("\n"); // spazio tra gruppi di bookmakers
+
+                        } catch (Exception e) {
+                            sb.append("⚠️ Bookmakers non leggibili\n\n");
+                        }
+                    }
+
+                    // 🔹 Separatore evento
+                    sb.append("------------------------------------------------\n");
+
+                    // 🔹 Aggiorna sentMap
+                    if (eventHash != null) sentMap.put(eventHash, System.currentTimeMillis());
+
+                    added++;
                 }
-            }
-
-            sb.append("\n"); // spazio tra gruppi di bookmakers
-
-        } catch (Exception e) {
-            sb.append("⚠️ Bookmakers non leggibili\n\n");
-        }
-    }
-
-    // 🔹 Separatore evento
-    sb.append("------------------------------------------------\n");
-
-    // 🔹 Aggiorna sentMap
-    if (eventHash != null) sentMap.put(eventHash, System.currentTimeMillis());
-
-    added++;
-}
 
 
                 if (added == 0) return "ℹ️ Nessuna nuova surebet da inviare";
