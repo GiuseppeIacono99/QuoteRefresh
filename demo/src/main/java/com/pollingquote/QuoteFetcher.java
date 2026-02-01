@@ -150,68 +150,65 @@ public class QuoteFetcher {
                 StringBuilder sb = new StringBuilder();
                 int added = 0;
                 purgeOldSent();
-                for (int i = 0; i < events.length(); i++) {
-                    JSONObject event = events.getJSONObject(i);
+for (int i = 0; i < events.length(); i++) {
+    JSONObject event = events.getJSONObject(i);
 
-                    String eventHash = computeEventHash(event);
-                    if (eventHash != null && sentMap.containsKey(eventHash)) continue;
+    String eventHash = computeEventHash(event);
+    if (eventHash != null && sentMap.containsKey(eventHash)) continue;
 
-                    sb.append("🏟 Evento: ").append(event.optString("gruppo_evento")).append("\n");
-                    sb.append("🎮 Match: ").append(event.optString("nome_evento")).append("\n");
-                    sb.append("👤 Giocatore: ").append(event.optString("player_name")).append("\n");
-                    sb.append("📈 Profitto: ").append(event.optString("profitto")).append("%\n");
-                    sb.append("💰 Quota Min: ").append(event.optString("valore_min"))
-                            .append(" | Quota Max: ").append(event.optString("valore_max")).append("\n");
-                    sb.append("⏱ Durata: ").append(event.optString("durata_surebet")).append("\n");
+    // 🔹 Header evento
+    sb.append("🏆 NUOVA SUROBET: ").append(event.optString("valore_min")).append("\n");
+    sb.append("📌 Evento: ").append(event.optString("gruppo_evento")).append("\n");
+    sb.append("🎮 Match: ").append(event.optString("nome_evento")).append("\n");
+    sb.append("👤 Giocatore: ").append(event.optString("player_name")).append("\n\n");
 
-                    if (event.has("desc")) {
-                        String encodedDesc = event.optString("desc");
-                        String desc = decodeMaybeBase64(encodedDesc);
-                        sb.append("🎯 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n");
-                    }
+    // 🔹 Giocata
+    if (event.has("desc")) {
+        String encodedDesc = event.optString("desc");
+        String desc = decodeMaybeBase64(encodedDesc);
+        sb.append("💡 Giocata: ").append(desc != null ? desc : "[non decodificabile]").append("\n\n");
+    }
 
-                    if (event.has("items")) {
-                        try {
-                            JSONArray inner = parseItems(event.get("items"));
-                            sb.append("📌 Bookmakers:\n");
-                            for (int j = 0; j < inner.length(); j++) {
-                                JSONObject b = inner.getJSONObject(j);
-                                sb.append("   → ")
-                                        .append(b.optString("bname"))
-                                        .append(" @ ")
-                                        .append(formatQuota(b.optString("value")))
-                                        .append("\n");
+    // 🔹 Bookmakers
+    if (event.has("items")) {
+        try {
+            JSONArray inner = parseItems(event.get("items"));
+            sb.append("📌 Bookmakers:\n");
 
-                                if (b.has("desc")) {
-                                    String bEnc = b.optString("desc");
-                                    String bDesc = decodeMaybeBase64(bEnc);
-                                    sb.append("      Giocata: ").append(bDesc != null ? bDesc : "[non decodificabile]").append("\n");
-                                }
-                            }
-                        } catch (Exception e) {
-                            sb.append("⚠️ Bookmakers non leggibili\n");
-                        }
-                    }
+            for (int j = 0; j < inner.length(); j++) {
+                JSONObject b = inner.getJSONObject(j);
 
-                    if (event.has("bookmakers")) {
-                        JSONArray bookmakers = event.optJSONArray("bookmakers");
-                        if (bookmakers != null) {
-                            sb.append("📚 Bookmakers consolidati:\n");
-                            for (int k = 0; k < bookmakers.length(); k++) {
-                                JSONObject b = bookmakers.getJSONObject(k);
-                                sb.append("   🔗 ")
-                                        .append(b.optString("bname"))
-                                        .append(" | quota ")
-                                        .append(formatQuota(b.optString("value")))
-                                        .append("\n");
-                            }
-                        }
-                    }
+                sb.append("   → ")
+                  .append(b.optString("bname"))
+                  .append(" @ ")
+                  .append(formatQuota(b.optString("value")))
+                  .append("\n");
 
-                    sb.append("------------------------------------------------\n");
-                    if (eventHash != null) sentMap.put(eventHash, System.currentTimeMillis());
-                    added++;
+                if (b.has("desc")) {
+                    String bEnc = b.optString("desc");
+                    String bDesc = decodeMaybeBase64(bEnc);
+                    sb.append("      Giocata: ")
+                      .append(bDesc != null ? bDesc : "[non decodificabile]")
+                      .append("\n");
                 }
+            }
+
+            sb.append("\n"); // spazio tra gruppi di bookmakers
+
+        } catch (Exception e) {
+            sb.append("⚠️ Bookmakers non leggibili\n\n");
+        }
+    }
+
+    // 🔹 Separatore evento
+    sb.append("------------------------------------------------\n");
+
+    // 🔹 Aggiorna sentMap
+    if (eventHash != null) sentMap.put(eventHash, System.currentTimeMillis());
+
+    added++;
+}
+
 
                 if (added == 0) return "ℹ️ Nessuna nuova surebet da inviare";
                 return sb.toString();
